@@ -1161,6 +1161,25 @@ async def get_notice(request):
                 return web.Response(text="Unable to retrieve Notice", status=200)
 
 
+import os
+import sys
+
+def reset_gpu_and_restart():
+    # Include sys.executable as the first argument and escape single quotes in arguments
+    argv = [sys.executable] + sys.argv
+    escaped_argv = [arg.replace("'", "'\\''") for arg in argv]
+    argv_string = ' '.join([f"'{arg}'" for arg in escaped_argv])
+    
+    # Command to reset GPU and restart the script
+    cmd = f"nvidia-smi --gpu-reset; sleep 5; exec {argv_string}"
+
+    # Execute the command using os.execve to replace the current process
+    try:
+        return os.execv('/bin/sh', ['/bin/sh', '-c', cmd])
+    except Exception as e:
+        printf(f"WARNING [reset_gpu_and_restart] Command >>{cmd}<< failed with exception {e.__class__.__name__}: {e}")
+        return os.execv(sys.executable, [sys.executable] + sys.argv)
+
 @PromptServer.instance.routes.get("/manager/reboot")
 def restart(self):
     if not is_allowed_security_level('middle'):
@@ -1181,9 +1200,10 @@ def restart(self):
 
     print(f"\nRestarting... [Legacy Mode]\n\n")
     if sys.platform.startswith('win32'):
+        # TODO implement GPU reboot on Win32
         return os.execv(sys.executable, ['"' + sys.executable + '"', '"' + sys.argv[0] + '"'] + sys.argv[1:])
     else:
-        return os.execv(sys.executable, [sys.executable] + sys.argv)
+        reset_gpu_and_restart()
 
 
 def sanitize_filename(input_string):
